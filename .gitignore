@@ -1,0 +1,34 @@
+# Dynatrace API credentials
+.env
+*.token
+.dynatrace
+
+# Downloaded extension source
+extension-source/
+
+# Build artifacts
+*.zip
+build/
+dist/
+
+# Certificates and keys
+*.key
+*.pem
+*.crt
+extension/certs/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (only README.md and CLAUDE.md are in repo)
+QUICK-DEPLOY-REFERENCE.md
+REDPANDA-USER-GUIDE.md
+SUMMARY.md

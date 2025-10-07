@@ -1,0 +1,36 @@
+{
+  "name": "custom:redpanda.enhanced",
+  "version": "1.0.0",
+  "description": "Enhanced Redpanda monitoring with comprehensive metrics for production workloads",
+  "enabled": true,
+  "activationContext": {
+    "description": "Configure Redpanda monitoring endpoints",
+    "properties": {
+      "prometheusEndpoint": {
+        "displayName": "Redpanda Prometheus Endpoint",
+        "description": "URL of the Redpanda Prometheus metrics endpoint (typically http://redpanda-host:9644/metrics)",
+        "type": "text",
+        "default": "http://localhost:9644/metrics"
+      },
+      "scrapeInterval": {
+        "displayName": "Scrape Interval (minutes)",
+        "description": "How often to collect metrics from Redpanda",
+        "type": "integer",
+        "default": 1,
+        "constraints": [
+          {
+            "type": "RANGE",
+            "minimum": 1,
+            "maximum": 10
+          }
+        ]
+      },
+      "clusterName": {
+        "displayName": "Cluster Name",
+        "description": "Name of your Redpanda cluster (for filtering and grouping)",
+        "type": "text",
+        "default": "redpanda-cluster"
+      }
+    }
+  }
+}
