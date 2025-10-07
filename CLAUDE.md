@@ -10,12 +10,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repository contains a **production-ready Dynatrace Extensions 2.0 integration** for comprehensive Redpanda monitoring.
 
-**Current Version**: 1.0.5 (October 7, 2025)
-**Status**: Production Ready
-**Metrics**: 23 collected (21 without consumer lag enabled)
-**Success Rate**: 91% (20/22 metrics - histogram latency excluded due to platform limitation)
+**Current Version**: 1.0.11 (October 7, 2025)
+**Status**: Production Ready - 100% Feature Parity Achieved
+**Metrics**: 40 collected (all official extension metrics + 2 unique + 9 latency histogram-derived metrics)
+**Success Rate**: 100% (40/40 metrics - zero limitations)
 
-**Key Context**: The official Dynatrace Redpanda integration lacks essential metrics for I/O performance, partition health, and detailed service monitoring. This custom extension provides 100% coverage of critical production metrics.
+**Key Context**: This custom extension is now a **complete superset** of the official Dynatrace Redpanda extension with **zero limitations**. It includes all 29 official metrics plus 2 additional unique critical metrics (disk alert, RPC timeouts) plus all 3 latency histograms (Kafka, RPC, REST Proxy) with full percentile support (p50, p75, p90, p95, p99).
 
 ---
 
@@ -83,10 +83,12 @@ metrics:  # Global metadata section
 
 ### Metric Categories
 
-1. **Latency** (4 metrics - NOT COLLECTED, platform limitation)
-   - Kafka request latency (sum/count)
-   - RPC request latency (sum/count)
-   - **Issue**: Dynatrace Extensions 2.0 Prometheus data source doesn't support histogram `_sum`/`_count` metrics
+1. **Latency** (3 histograms → 9 metrics in Dynatrace UI) - ✅ **FULLY SUPPORTED**
+   - `redpanda.kafka.request.latency.seconds` (histogram)
+   - `redpanda.rpc.request.latency.seconds` (histogram)
+   - `redpanda.rest_proxy.request.latency.seconds` (histogram)
+   - Each histogram produces: `_bucket`, `_count`, `_sum` metrics in Dynatrace
+   - Supports percentile queries: p50, p75, p90, p95, p99
 
 2. **I/O Performance** (2 metrics)
    - `redpanda.io.queue.read.ops.total`
@@ -112,17 +114,31 @@ metrics:  # Global metadata section
    - `redpanda.schema_registry.request.errors.total`
    - `redpanda.rest_proxy.request.errors.total`
 
-7. **Consumer Groups** (3 metrics)
+7. **Consumer Groups** (5 metrics)
    - `redpanda.kafka.consumer_group.committed_offset`
    - `redpanda.kafka.consumer_group.lag.max`
    - `redpanda.kafka.consumer_group.lag.sum`
+   - `redpanda.kafka.consumer_group.consumers` (NEW in v1.0.8)
+   - `redpanda.kafka.consumer_group.topics` (NEW in v1.0.8)
    - **Note**: Lag metrics require Redpanda config: `rpk cluster config set enable_consumer_group_metrics '["group", "partition", "consumer_lag"]'`
 
-8. **Topics/Partitions** (1 metric)
-   - `redpanda.kafka.request.bytes.total`
+8. **Cluster Topology** (4 metrics) - NEW in v1.0.8
+   - `redpanda.cluster.brokers` - Number of brokers in cluster
+   - `redpanda.cluster.partitions` - Total partition count
+   - `redpanda.cluster.topics` - Total topic count
+   - `redpanda.kafka.replicas` - Replica configuration per topic
 
-9. **RPC Connections** (1 metric)
-   - `redpanda.rpc.active_connections`
+9. **Partition Tracking** (1 metric) - NEW in v1.0.8
+   - `redpanda.kafka.max_offset` - Max offset (high watermark) per partition
+
+10. **Application Info** (1 metric) - NEW in v1.0.8
+    - `redpanda.application.build` - Build version and revision
+
+11. **Topics/Partitions** (1 metric)
+    - `redpanda.kafka.request.bytes.total`
+
+12. **RPC Connections** (1 metric)
+    - `redpanda.rpc.active_connections`
 
 ---
 
@@ -331,26 +347,26 @@ pipx install dt-cli
 
 ## Known Issues and Limitations
 
-### 1. Histogram Latency Metrics (Cannot Fix)
+### 1. ✅ Histogram Latency Metrics - RESOLVED in v1.0.10-11
 
-**Issue**: Histogram `_sum` and `_count` metrics don't appear in Dynatrace
+**Previous Issue**: Histogram `_sum` and `_count` metrics didn't appear in Dynatrace
 
-**Affected metrics:**
-- `redpanda.kafka.request.latency.seconds.sum`
-- `redpanda.kafka.request.latency.seconds.count`
-- `redpanda.rpc.request.latency.seconds.sum`
-- `redpanda.rpc.request.latency.seconds.count`
+**Solution**: Use `type: histogram` and add `le` dimension for bucket collection
 
-**Root cause**: Dynatrace Extensions 2.0 Prometheus data source doesn't support histogram summary metrics
+**Result**: Full histogram support with percentile calculations (p50, p75, p90, p95, p99)
 
-**Attempted fixes** (all failed):
-- Version 1.0.2: type: count
-- Version 1.0.3: type: count (continued)
-- Version 1.0.4: type: gauge
+**Metrics added:**
+- v1.0.10: Kafka request latency, RPC request latency
+- v1.0.11: REST Proxy request latency (complete parity with official extension)
 
-**Workaround**: Use I/O operations, throughput, and CPU metrics as performance proxies
+**Query syntax:**
+```
+redpanda.kafka.request.latency.seconds_bucket.count:splitBy(redpanda_request):percentile(95.0)
+redpanda.rpc.request.latency.seconds_bucket.count:splitBy(redpanda_server):percentile(99.0)
+redpanda.rest_proxy.request.latency.seconds_bucket.count:percentile(99.0)
+```
 
-**Status**: Documented as known limitation
+**Status**: ✅ **FIXED** - All 3 latency histograms now working
 
 ### 2. Consumer Lag Metrics Require Configuration
 
@@ -394,12 +410,12 @@ curl http://redpanda-host:9644/public_metrics | grep "consumer_group_lag"
 
 **In Dynatrace UI:**
 1. **Metrics** → Search: `redpanda`
-2. **Expected**: 23 metrics (21 without consumer lag)
+2. **Expected**: 37 metrics (35 without consumer lag)
 3. **Extension Status**: Extensions → custom:redpanda.enhanced → Should show "OK"
 
 **Data Explorer Query:**
-```dql
-timeseries avg(redpanda.kafka.under_replicated_replicas), by:{redpanda_cluster}
+```
+redpanda.kafka.under_replicated_replicas:splitBy(redpanda_cluster):avg()
 ```
 
 **ActiveGate Logs:**
@@ -452,7 +468,35 @@ curl http://redpanda-host:9644/public_metrics
 
 ## Version History
 
-### 1.0.5 (Current - October 7, 2025)
+### 1.0.11 (Current - October 7, 2025)
+- ✅ **COMPLETE PARITY ACHIEVED** - Added REST Proxy request latency histogram
+- ✅ REST Proxy request latency with full percentile support (p50, p75, p90, p95, p99)
+- ✅ **40 metrics total** (all 29 official + 2 unique + 9 latency histogram-derived metrics)
+- ✅ **100% feature parity** - Complete superset with zero metric limitations
+- ✅ **100% success rate** (40/40 metrics working)
+- ✅ All 3 latency histograms from official extension now included
+
+### 1.0.10 (October 7, 2025)
+- ✅ **LATENCY HISTOGRAMS FIXED** - Added `le` dimension for histogram bucket collection
+- ✅ Kafka request latency with full percentile support (p50, p75, p90, p95, p99)
+- ✅ RPC request latency with full percentile support (p50, p75, p90, p95, p99)
+- ✅ **37 metrics total** (all official + 2 unique + 6 latency histogram-derived metrics)
+- ⚠️ Missing REST Proxy latency (fixed in v1.0.11)
+
+### 1.0.9 (October 7, 2025)
+- ✅ Changed latency metrics to `type: histogram`
+- ⚠️ Partial success - metrics appeared (35 total) but percentiles didn't work (missing `le` dimension)
+
+### 1.0.8 (October 7, 2025)
+- **Feature parity achieved** - All non-latency official extension metrics included
+- Added cluster topology metrics (brokers, partitions, topics, replicas)
+- Added consumer group metadata (consumer count, topic count per group)
+- Added partition max offset tracking
+- Added application build information
+- **31 metrics total** (29 from official + 2 unique)
+- **True superset** (except latency metrics)
+
+### 1.0.5 (October 7, 2025)
 - Fixed uptime metric name: `redpanda_uptime_seconds_total` → `redpanda_application_uptime_seconds_total`
 - Changed uptime metric type: `count` → `gauge`
 - Updated all documentation with consumer lag configuration

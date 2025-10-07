@@ -1,5 +1,5 @@
 name: custom:redpanda.enhanced
-version: 1.0.5
+version: 1.0.11
 minDynatraceVersion: '1.310'
 author:
   name: Custom Enhanced Redpanda Extension
@@ -17,24 +17,30 @@ prometheus:
       value: label:redpanda_request
     - key: redpanda_server
       value: label:redpanda_server
+    - key: le
+      value: label:le
     metrics:
-    - key: redpanda.kafka.request.latency.seconds.sum
-      value: metric:redpanda_kafka_request_latency_seconds_sum
-      type: gauge
-    - key: redpanda.kafka.request.latency.seconds.count
-      value: metric:redpanda_kafka_request_latency_seconds_count
-      type: gauge
+    - key: redpanda.kafka.request.latency.seconds
+      value: metric:redpanda_kafka_request_latency_seconds
+      type: histogram
   - subgroup: rpc_request_latency
     dimensions:
     - key: redpanda_server
       value: label:redpanda_server
+    - key: le
+      value: label:le
     metrics:
-    - key: redpanda.rpc.request.latency.seconds.sum
-      value: metric:redpanda_rpc_request_latency_seconds_sum
-      type: gauge
-    - key: redpanda.rpc.request.latency.seconds.count
-      value: metric:redpanda_rpc_request_latency_seconds_count
-      type: gauge
+    - key: redpanda.rpc.request.latency.seconds
+      value: metric:redpanda_rpc_request_latency_seconds
+      type: histogram
+  - subgroup: rest_proxy_request_latency
+    dimensions:
+    - key: le
+      value: label:le
+    metrics:
+    - key: redpanda.rest_proxy.request.latency.seconds
+      value: metric:redpanda_rest_proxy_request_latency_seconds
+      type: histogram
 - group: io_performance
   interval:
     minutes: 1
@@ -69,6 +75,15 @@ prometheus:
   - key: redpanda.node.status.rpcs_timed_out
     value: metric:redpanda_node_status_rpcs_timed_out
     type: count
+  - key: redpanda.cluster.brokers
+    value: metric:redpanda_cluster_brokers
+    type: gauge
+  - key: redpanda.cluster.partitions
+    value: metric:redpanda_cluster_partitions
+    type: gauge
+  - key: redpanda.cluster.topics
+    value: metric:redpanda_cluster_topics
+    type: gauge
 - group: throughput
   interval:
     minutes: 1
@@ -124,6 +139,16 @@ prometheus:
     - key: redpanda.storage.disk.free_space_alert
       value: metric:redpanda_storage_disk_free_space_alert
       type: gauge
+  - subgroup: application_metadata
+    dimensions:
+    - key: redpanda_version
+      value: label:redpanda_version
+    - key: redpanda_revision
+      value: label:redpanda_revision
+    metrics:
+    - key: redpanda.application.build
+      value: metric:redpanda_application_build
+      type: gauge
 - group: service_errors
   interval:
     minutes: 1
@@ -159,6 +184,12 @@ prometheus:
   - key: redpanda.kafka.consumer_group.committed_offset
     value: metric:redpanda_kafka_consumer_group_committed_offset
     type: gauge
+  - key: redpanda.kafka.consumer_group.consumers
+    value: metric:redpanda_kafka_consumer_group_consumers
+    type: gauge
+  - key: redpanda.kafka.consumer_group.topics
+    value: metric:redpanda_kafka_consumer_group_topics
+    type: gauge
 - group: topics_partitions
   interval:
     minutes: 1
@@ -175,6 +206,12 @@ prometheus:
   - key: redpanda.kafka.request.bytes.total
     value: metric:redpanda_kafka_request_bytes_total
     type: count
+  - key: redpanda.kafka.replicas
+    value: metric:redpanda_kafka_replicas
+    type: gauge
+  - key: redpanda.kafka.max_offset
+    value: metric:redpanda_kafka_max_offset
+    type: gauge
 - group: rpc_connections
   interval:
     minutes: 1
@@ -188,41 +225,31 @@ prometheus:
     value: metric:redpanda_rpc_active_connections
     type: gauge
 metrics:
-- key: redpanda.kafka.request.latency.seconds.sum
+- key: redpanda.kafka.request.latency.seconds
   metadata:
-    displayName: Kafka Request Latency Sum
-    description: Sum of Kafka request latencies (use with count to calculate average)
+    displayName: Kafka Request Latency
+    description: Histogram of Kafka request latencies - provides p50, p95, p99 percentiles
     unit: Second
     metricProperties:
       minValue: 0
       rootCauseRelevant: true
       impactRelevant: true
       valueType: unknown
-- key: redpanda.kafka.request.latency.seconds.count
+- key: redpanda.rpc.request.latency.seconds
   metadata:
-    displayName: Kafka Request Latency Count
-    description: Number of Kafka requests (use with sum to calculate average)
-    unit: Count
-    metricProperties:
-      minValue: 0
-      rootCauseRelevant: true
-      impactRelevant: true
-      valueType: unknown
-- key: redpanda.rpc.request.latency.seconds.sum
-  metadata:
-    displayName: Internal RPC Latency Sum
-    description: Sum of internal RPC latencies between brokers
+    displayName: Internal RPC Request Latency
+    description: Histogram of internal RPC request latencies between brokers - provides p50, p95, p99 percentiles
     unit: Second
     metricProperties:
       minValue: 0
       rootCauseRelevant: true
       impactRelevant: true
       valueType: unknown
-- key: redpanda.rpc.request.latency.seconds.count
+- key: redpanda.rest_proxy.request.latency.seconds
   metadata:
-    displayName: Internal RPC Latency Count
-    description: Number of internal RPC requests
-    unit: Count
+    displayName: REST Proxy Request Latency
+    description: Histogram of REST Proxy request latencies - provides p50, p95, p99 percentiles
+    unit: Second
     metricProperties:
       minValue: 0
       rootCauseRelevant: true
@@ -453,6 +480,86 @@ metrics:
   metadata:
     displayName: Active RPC Connections
     description: Number of active RPC connections
+    unit: Count
+    metricProperties:
+      minValue: 0
+      rootCauseRelevant: false
+      impactRelevant: false
+      valueType: unknown
+- key: redpanda.cluster.brokers
+  metadata:
+    displayName: Cluster Brokers
+    description: Number of configured brokers in the cluster
+    unit: Count
+    metricProperties:
+      minValue: 0
+      rootCauseRelevant: false
+      impactRelevant: true
+      valueType: unknown
+- key: redpanda.cluster.partitions
+  metadata:
+    displayName: Cluster Partitions
+    description: Total number of partitions in the cluster (replicas not included)
+    unit: Count
+    metricProperties:
+      minValue: 0
+      rootCauseRelevant: false
+      impactRelevant: false
+      valueType: unknown
+- key: redpanda.cluster.topics
+  metadata:
+    displayName: Cluster Topics
+    description: Total number of topics in the cluster
+    unit: Count
+    metricProperties:
+      minValue: 0
+      rootCauseRelevant: false
+      impactRelevant: false
+      valueType: unknown
+- key: redpanda.kafka.replicas
+  metadata:
+    displayName: Topic Replicas
+    description: Configured number of replicas for the topic
+    unit: Count
+    metricProperties:
+      minValue: 0
+      rootCauseRelevant: false
+      impactRelevant: false
+      valueType: unknown
+- key: redpanda.kafka.max_offset
+  metadata:
+    displayName: Partition Max Offset
+    description: Latest readable offset of the partition (high watermark)
+    unit: Count
+    metricProperties:
+      minValue: 0
+      rootCauseRelevant: false
+      impactRelevant: false
+      valueType: unknown
+- key: redpanda.kafka.consumer_group.consumers
+  metadata:
+    displayName: Consumer Group - Number of Consumers
+    description: Number of active consumers in the consumer group
+    unit: Count
+    metricProperties:
+      minValue: 0
+      rootCauseRelevant: false
+      impactRelevant: false
+      valueType: unknown
+- key: redpanda.kafka.consumer_group.topics
+  metadata:
+    displayName: Consumer Group - Number of Topics
+    description: Number of topics consumed by the consumer group
+    unit: Count
+    metricProperties:
+      minValue: 0
+      rootCauseRelevant: false
+      impactRelevant: false
+      valueType: unknown
+- key: redpanda.application.build
+  metadata:
+    displayName: Application Build Information
+    description: Redpanda build information (version and revision)
     unit: Count
     metricProperties:
       minValue: 0
