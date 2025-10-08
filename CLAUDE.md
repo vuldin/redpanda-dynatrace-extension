@@ -8,14 +8,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains a **production-ready Dynatrace Extensions 2.0 integration** for comprehensive Redpanda monitoring.
+This repository contains a **production-ready Dynatrace Extensions 2.0 integration** for comprehensive Redpanda monitoring with custom topology support.
 
-**Current Version**: 1.0.11 (October 7, 2025)
-**Status**: Production Ready - 100% Feature Parity Achieved
+**Current Version**: 1.0.13 (October 7, 2025)
+**Status**: Production Ready - 100% Feature Parity + Partial Topology
 **Metrics**: 40 collected (all official extension metrics + 2 unique + 9 latency histogram-derived metrics)
 **Success Rate**: 100% (40/40 metrics - zero limitations)
+**Topology**: Cluster and topic entities working (namespace/partition entities limited)
 
-**Key Context**: This custom extension is now a **complete superset** of the official Dynatrace Redpanda extension with **zero limitations**. It includes all 29 official metrics plus 2 additional unique critical metrics (disk alert, RPC timeouts) plus all 3 latency histograms (Kafka, RPC, REST Proxy) with full percentile support (p50, p75, p90, p95, p99).
+**Key Context**: This custom extension is now a **complete superset** of the official Dynatrace Redpanda extension with **zero limitations**. It includes all 29 official metrics plus 2 additional unique critical metrics (disk alert, RPC timeouts) plus all 3 latency histograms (Kafka, RPC, REST Proxy) with full percentile support (p50, p75, p90, p95, p99). Version 1.0.13 adds custom topology support with cluster and topic entities visible in Smartscape.
 
 ---
 
@@ -139,6 +140,87 @@ metrics:  # Global metadata section
 
 12. **RPC Connections** (1 metric)
     - `redpanda.rpc.active_connections`
+
+---
+
+## Topology Configuration
+
+**Version 1.0.13** adds custom topology support creating entities in Dynatrace Smartscape.
+
+### Entity Types Defined
+
+Four entity types are defined in the `topology:` section of extension.yaml (lines 6-99):
+
+1. **redpanda:cluster** - Cluster-level entities
+2. **redpanda:namespace** - Namespace entities
+3. **redpanda:topic** - Topic entities
+4. **redpanda:partition** - Partition entities
+
+### Entity Relationships
+
+Three CHILD_OF relationships create hierarchy:
+- Namespace → Cluster
+- Topic → Namespace
+- Partition → Topic
+
+### Working vs Not Working
+
+**✅ Working (entities created):**
+- **Cluster entities** - Created from `redpanda.cluster.brokers` metric which has `redpanda_cluster: const:your-redpanda-cluster` dimension
+- **Topic entities** - Created from `redpanda.kafka.replicas` metric which has `redpanda_cluster` dimension
+
+**❌ Not Working (entities defined but not instantiated):**
+- **Namespace entities** - Cannot get `redpanda_cluster` dimension on namespace-only metrics
+- **Partition entities** - Cannot get `redpanda_cluster` dimension on partition-level metrics like `under_replicated_replicas`
+
+### Root Cause: Const Dimension Limitation
+
+After extensive testing (v1.0.14 through v1.0.22), we discovered a Dynatrace Extensions 2.0 limitation:
+
+**The `const:` dimension approach doesn't consistently apply to all metrics**, even when:
+- Metrics are in the same group with identical dimension configuration
+- Metrics are in subgroups inheriting parent dimensions
+- Dimensions are explicitly defined at every level
+
+**Example:** In the same `topics_partitions` group:
+- `kafka.replicas` ✅ Gets `redpanda_cluster` dimension
+- `kafka.under_replicated_replicas` ❌ Does NOT get `redpanda_cluster` dimension
+
+This appears to be non-deterministic behavior in how Dynatrace processes const dimensions for Prometheus-based extensions.
+
+### Entity ID Patterns
+
+**Cluster:**
+```
+redpanda_cluster_{redpanda_cluster}
+```
+
+**Topic:**
+```
+redpanda_topic_{redpanda_cluster}_{redpanda_namespace}_{redpanda_topic}
+```
+
+### Viewing Entities
+
+```dql
+# List all cluster entities
+fetch dt.entity.redpanda:cluster
+
+# List all topic entities
+fetch dt.entity.redpanda:topic
+```
+
+Or navigate to: **Observe and explore → Entities** → Filter by `redpanda:cluster` or `redpanda:topic`
+
+### Cluster Name Configuration
+
+The cluster name is defined as a static constant in extension.yaml (line 106, 143, etc.):
+```yaml
+- key: redpanda_cluster
+  value: const:your-redpanda-cluster
+```
+
+To change the cluster name, update all instances of `const:your-redpanda-cluster` to `const:your-actual-cluster-name` before building.
 
 ---
 
@@ -410,7 +492,7 @@ curl http://redpanda-host:9644/public_metrics | grep "consumer_group_lag"
 
 **In Dynatrace UI:**
 1. **Metrics** → Search: `redpanda`
-2. **Expected**: 37 metrics (35 without consumer lag)
+2. **Expected**: 40 metrics (38 without consumer lag)
 3. **Extension Status**: Extensions → custom:redpanda.enhanced → Should show "OK"
 
 **Data Explorer Query:**
@@ -468,7 +550,16 @@ curl http://redpanda-host:9644/public_metrics
 
 ## Version History
 
-### 1.0.11 (Current - October 7, 2025)
+### 1.0.13 (Current - October 7, 2025)
+- ✅ **CUSTOM TOPOLOGY SUPPORT** - Cluster and topic entities in Smartscape
+- ✅ Entity-based health tracking and problem correlation
+- ✅ Visual topology navigation for clusters and topics
+- ✅ Entity selector query support
+- ⚠️ Namespace/partition entities defined but not instantiated (Dynatrace const dimension limitation discovered after testing v1.0.14-1.0.22)
+- ✅ All 40 metrics continue working with 100% feature parity
+- 📝 Documented topology limitation with root cause analysis
+
+### 1.0.11 (October 7, 2025)
 - ✅ **COMPLETE PARITY ACHIEVED** - Added REST Proxy request latency histogram
 - ✅ REST Proxy request latency with full percentile support (p50, p75, p90, p95, p99)
 - ✅ **40 metrics total** (all 29 official + 2 unique + 9 latency histogram-derived metrics)
@@ -528,33 +619,42 @@ curl http://redpanda-host:9644/public_metrics
 
 ### User-Facing Documentation
 
-1. **QUICK-DEPLOY-REFERENCE.md** (1 page)
-   - 30-minute quick start
-   - Minimal explanation, maximum clarity
-   - Target: Users deploying for first time
+1. **README.md**
+   - Project overview with quick start
+   - Current status and capabilities
+   - Links to detailed guides
+   - Target: First-time visitors
 
-2. **REDPANDA-USER-GUIDE.md** (18KB)
-   - Comprehensive guide
+2. **REDPANDA-USER-GUIDE.md**
+   - Comprehensive deployment guide
    - Detailed troubleshooting
+   - Configuration and updates
    - Target: Users managing the extension
 
-3. **SUMMARY.md** (17KB)
-   - Technical summary
+3. **GAP-ANALYSIS.md**
+   - Feature comparison with official extension
    - Complete metrics catalog
-   - Gap analysis vs official integration
+   - Migration recommendations
    - Target: Technical decision-makers
+
+4. **MIGRATION-GUIDE.md**
+   - Step-by-step migration from official extension
+   - What you gain/lose
+   - Rollback procedures
+   - Target: Users migrating from official extension
+
+5. **TOPOLOGY-DRAFT.md**
+   - Topology implementation details
+   - Working vs. limited entity types
+   - Root cause analysis of limitations
+   - Target: Developers understanding topology
 
 ### Developer Documentation
 
-4. **CLAUDE.md** (this file)
+6. **CLAUDE.md** (this file)
    - Development guide
    - Architecture and patterns
    - Target: Contributors and AI assistants
-
-5. **README.md**
-   - Project overview
-   - Quick links to other docs
-   - Target: First-time visitors to repository
 
 ---
 

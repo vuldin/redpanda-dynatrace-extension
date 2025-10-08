@@ -1,8 +1,8 @@
 # Gap Analysis: Official vs Enhanced Dynatrace Redpanda Extension
 
-**Date**: October 7, 2025
+**Date**: October 8, 2025
 **Official Extension**: Redpanda (Dynatrace Hub)
-**Enhanced Extension**: custom:redpanda.enhanced v1.0.11
+**Enhanced Extension**: custom:redpanda.enhanced v1.0.13
 **GitHub Repository**: https://github.com/vuldin/redpanda-dynatrace-extension
 
 ---
@@ -57,7 +57,7 @@ The official Dynatrace Redpanda extension from the Hub provides **29 metrics** f
 | **Unavailable partitions** | ✅ | ✅ | CRITICAL |
 | **Leadership changes** | ⚠️ Transfers | ✅ Changes | CRITICAL |
 | **Node RPC timeouts** | ❌ | ✅ | CRITICAL |
-| Partition max offset | ✅ | ❌ | Low |
+| Partition max offset | ✅ | ✅ | Low |
 
 **Gap Identified**: Official tracks "leadership transfers" (different metric). Enhanced tracks "leadership changes" which is more useful for detecting cluster instability.
 
@@ -174,15 +174,16 @@ rpk cluster config set enable_consumer_group_metrics '["group", "partition", "co
 
 ## Feature Comparison
 
-| Feature | Official | Enhanced |
+| Feature | Official | Enhanced (v1.0.13) |
 |---------|----------|----------|
-| **Custom Topology** | ✅ (namespace, topic, partition) | ❌ |
-| **Overview Dashboard** | ✅ (Classic & Gen3) | ❌ |
-| **Critical Alerting Metrics** | ⚠️ Partial | ✅ Complete |
+| **Custom Topology** | ✅ (namespace, topic, partition) | ⚠️ **Partial** (cluster & topic working; namespace & partition limited by Dynatrace constraint) |
+| **Overview Dashboard** | ✅ (Classic & Gen3) | 🔮 Future (all metrics available) |
+| **Critical Alerting Metrics** | ⚠️ Partial | ✅ **Complete** |
 | **Disk Space Alerting** | ❌ | ✅ |
 | **Memory Granularity** | ⚠️ Limited | ✅ Detailed |
 | **Service Error Monitoring** | ⚠️ Partial | ✅ Complete |
 | **Node Connectivity Monitoring** | ❌ | ✅ (RPC timeouts) |
+| **Latency Histograms** | ✅ | ✅ **Complete Parity** (p50, p75, p90, p95, p99) |
 | **GitHub Source** | ❌ Closed | ✅ Open |
 | **Customizable** | ❌ | ✅ |
 
@@ -227,17 +228,23 @@ These are **production-critical** metrics missing from the official extension:
 
 These are the only remaining limitations of the enhanced extension compared to official:
 
-### 🟠 LOW
+### 🔮 FUTURE ENHANCEMENTS (Not Blocking)
 
-1. **Overview Dashboard**
-   - **Impact**: Must build custom dashboards
-   - **Official advantage**: ✅ Pre-built dashboard with visualizations
-   - **Mitigation**: All metrics available, can build equivalent dashboard
+1. **Custom Topology Types**
+   - **Status**: ⚠️ Partial implementation in v1.0.13 (2 of 4 entity types working)
+   - **Working**: ✅ Cluster entities, ✅ Topic entities (visible in Smartscape)
+   - **Limited**: ❌ Namespace entities, ❌ Partition entities (blocked by Dynatrace const dimension limitation)
+   - **Root Cause**: Dynatrace Extensions 2.0 doesn't consistently apply `const:` dimensions to all metrics in Prometheus-based extensions
+   - **Official advantage**: ✅ Full namespace/topic/partition entities with visual relationships
+   - **Current workaround**: ✅ Dimensions (`redpanda_namespace`, `redpanda_topic`, `redpanda_partition`) provide filtering in Data Explorer; cluster and topic entities provide visual topology for most use cases
+   - **Future**: May require Dynatrace Extensions 2.0 fix or external label injection via Prometheus configuration
 
-2. **Custom Topology Types**
-   - **Impact**: No automatic entity relationships in Dynatrace
-   - **Official advantage**: ✅ Creates namespace/topic/partition entities
-   - **Mitigation**: Dimensions provide equivalent filtering capabilities
+2. **Overview Dashboard**
+   - **Status**: Can be built from metrics, deferred for future release
+   - **Impact**: Must build custom dashboards initially
+   - **Official advantage**: ✅ Pre-built dashboard with visualizations (Classic & Gen3)
+   - **Current workaround**: ✅ All 40 metrics available for custom dashboard creation
+   - **Future**: Community-contributed dashboard templates
 
 ### ✅ CLOSED GAPS
 
@@ -251,8 +258,14 @@ These are the only remaining limitations of the enhanced extension compared to o
 - **Kafka Request Latency Histogram** - ✅ FIXED: Full histogram support with percentile queries
 - **RPC Request Latency Histogram** - ✅ FIXED: Full histogram support with percentile queries
 
-**v1.0.11:**
-- **REST Proxy Request Latency Histogram** - ✅ FIXED: Full histogram support with percentile queries
+**v1.0.11 (October 7, 2025):**
+- **REST Proxy Request Latency Histogram** - ✅ FIXED: Complete parity with official extension (40 metrics total)
+
+**v1.0.13 (October 8, 2025 - Current):**
+- **Custom Topology** - ⚠️ PARTIAL: Cluster and topic entities working in Smartscape (namespace/partition limited by Dynatrace const dimension constraint)
+- **Entity-based filtering** - ✅ Cluster and topic entities visible in Smartscape
+- **Visual topology** - ⚠️ Partial hierarchy (cluster → topic relationship working)
+- **Root cause identified** - Dynatrace Extensions 2.0 doesn't consistently apply `const:` dimensions to all metrics in Prometheus-based extensions
 
 ---
 
@@ -286,17 +299,19 @@ These are the only remaining limitations of the enhanced extension compared to o
 
 ### ⚠️ Use Official Extension When:
 
-**Not recommended - Enhanced extension has achieved full parity:**
+**Not recommended - Enhanced extension has achieved full metric parity:**
 
 The only reasons to consider official extension:
 
-1. **Pre-built dashboards** are required
-   - Want out-of-the-box visualizations
-   - Cannot build custom dashboards
+1. **Visual topology view is critical**
+   - Need Dynatrace topology UI with namespace/topic/partition entities
+   - Cannot use dimension-based filtering (`redpanda_namespace`, `redpanda_topic`, `redpanda_partition`)
+   - Note: Enhanced can add this feature in future release
 
-2. **Custom topology types** are required
-   - Need Dynatrace to model namespace/topic/partition entities
-   - Dimensions-based filtering not sufficient
+2. **Pre-built dashboards are required**
+   - Need immediate out-of-the-box visualizations
+   - Cannot build custom dashboards from the 40 available metrics
+   - Note: Enhanced provides all metrics needed to replicate dashboard
 
 ### ⚠️ Use BOTH Extensions:
 
@@ -315,8 +330,12 @@ Previously, running both extensions was recommended to get latency histograms fr
 **Highly Recommended** - Enhanced is a complete superset with zero metric limitations:
 
 **You will lose:**
-- Pre-built dashboards (can rebuild using same metrics)
-- Custom topology entity types (dimensions provide equivalent filtering)
+- Visual topology view (namespace/topic/partition entities)
+  - **Workaround**: Use dimensions for filtering (`redpanda_namespace`, `redpanda_topic`, `redpanda_partition`)
+  - **Future**: Can be added to enhanced extension
+- Pre-built dashboards
+  - **Workaround**: All 40 metrics available to build custom dashboards
+  - **Future**: Community dashboard templates
 
 **You will gain:**
 - All 29 official metrics (100% parity including all latency histograms)
@@ -326,21 +345,22 @@ Previously, running both extensions was recommended to get latency histograms fr
 - Community-driven improvements
 
 **Do this if:**
-- You want complete metric coverage with additional critical metrics (recommended for all users)
-- You can build custom dashboards using metrics
+- You want complete metric coverage with additional critical metrics (recommended for most users)
+- Visual topology view is not critical (dimension filtering is sufficient)
+- You can build custom dashboards using metrics or use community templates
 - You value open source and customizability
 
 ### From Enhanced to Official Only
 
-**Not Recommended** - You will lose unique critical metrics with no benefit:
+**Not Recommended** - You will lose unique critical metrics:
 - Disk space binary alerts (unique to enhanced)
 - Node RPC timeout detection (unique to enhanced)
 - Open source customization
 
 **Do this only if:**
-- Pre-built dashboards are absolutely required
-- Custom topology entities are essential
-- You cannot build custom dashboards
+- Visual topology view is absolutely essential for your workflow
+- Pre-built dashboards are critical and you cannot wait for community templates
+- You cannot use dimension-based filtering as alternative to topology entities
 
 ### Continue Using Both
 
@@ -448,7 +468,7 @@ Use **enhanced extension** as it is now a **complete superset** of the official 
 2. **100% Feature Parity**: No limitations - every metric from official extension is now supported
 3. **Additional Benefits**: Open source, customizable, community-driven, full percentile query support on all histograms
 
-### No Reason to Choose Official
+### Minimal Reasons to Choose Official
 
 **The enhanced extension now provides:**
 - ✅ All official extension metrics (100% coverage including all 3 latency histograms)
@@ -456,10 +476,15 @@ Use **enhanced extension** as it is now a **complete superset** of the official 
 - ✅ 2 additional unique critical metrics (disk alert, RPC timeouts)
 - ✅ Complete memory, cluster topology, and consumer group metrics
 - ✅ Open source and customizable
+- ✅ Dimension-based filtering (equivalent to topology for most use cases)
+
+**Choose official only if:**
+- Visual topology view is critical (enhanced uses dimensions instead)
+- Pre-built dashboards are essential (enhanced provides all metrics to build custom)
 
 ### Use Both Extensions: Not Needed
 
-**Previous gap (latency histograms) resolved in v1.0.10-11**. There is no longer any metric-based reason to run both extensions. Only consider official if pre-built dashboards or custom topology entities are essential.
+**Previous gap (latency histograms) resolved in v1.0.10-11**. There is no longer any metric-based reason to run both extensions. The only consideration is visual topology view vs. dimension-based filtering.
 
 ### Success Rate Summary
 
@@ -491,28 +516,34 @@ Use **enhanced extension** as it is now a **complete superset** of the official 
 10. `redpanda.application.build.info`
 
 **REST Proxy (2):**
+
 11. `redpanda.rest_proxy.request.errors.total`
 12. `redpanda.rest_proxy.request.latency.seconds` (histogram)
 
 **Topic Metrics (3):**
+
 13. `redpanda.kafka.replicas`
 14. `redpanda.kafka.request.bytes.total`
 15. `redpanda.kafka.leadership.transfers`
 
 **Partition Metrics (2):**
+
 16. `redpanda.kafka.max_offset`
 17. `redpanda.kafka.under_replicated_replicas`
 
 **Cluster Metrics (4):**
+
 18. `redpanda.cluster.brokers`
 19. `redpanda.cluster.partitions`
 20. `redpanda.cluster.topics`
 21. `redpanda.cluster.unavailable_partitions`
 
 **Broker Metrics (1):**
+
 22. `redpanda.kafka.request.latency.seconds` (histogram)
 
 **Consumer Group Metrics (5):**
+
 23. `redpanda.kafka.consumer_group.committed_offset`
 24. `redpanda.kafka.consumer_group.lag.max`
 25. `redpanda.kafka.consumer_group.lag.sum`
@@ -520,17 +551,20 @@ Use **enhanced extension** as it is now a **complete superset** of the official 
 27. `redpanda.kafka.consumer_group.topics`
 
 **Throughput (2):**
+
 28. `redpanda.rpc.received.bytes`
 29. `redpanda.rpc.sent.bytes`
 
 ### Enhanced Extension Metrics v1.0.11 (34 base metrics → 40 in Dynatrace UI)
 
 **Latency Histograms (3 base → 9 in UI):**
+
 1. `redpanda.kafka.request.latency.seconds` (histogram) → produces _bucket, _count, _sum (NEW in v1.0.10)
 2. `redpanda.rpc.request.latency.seconds` (histogram) → produces _bucket, _count, _sum (NEW in v1.0.10)
 3. `redpanda.rest_proxy.request.latency.seconds` (histogram) → produces _bucket, _count, _sum (NEW in v1.0.11)
 
 **Critical Production (5):**
+
 4. `redpanda.kafka.under_replicated_replicas` ⚡
 5. `redpanda.cluster.unavailable_partitions` ⚡
 6. `redpanda.storage.disk.free_space_alert` ⚡ (unique to enhanced)
@@ -538,6 +572,7 @@ Use **enhanced extension** as it is now a **complete superset** of the official 
 8. `redpanda.node.status.rpcs_timed_out` ⚡ (unique to enhanced)
 
 **Infrastructure (7):**
+
 9. `redpanda.cpu.busy.seconds.total`
 10. `redpanda.uptime.seconds.total`
 11. `redpanda.memory.available.bytes`
@@ -547,18 +582,22 @@ Use **enhanced extension** as it is now a **complete superset** of the official 
 15. `redpanda.storage.disk.total.bytes`
 
 **I/O Performance (2):**
+
 16. `redpanda.io.queue.read.ops.total`
 17. `redpanda.io.queue.write.ops.total`
 
 **Throughput (2):**
+
 18. `redpanda.rpc.received.bytes`
 19. `redpanda.rpc.sent.bytes`
 
 **Service Errors (2):**
+
 20. `redpanda.schema_registry.request.errors.total`
 21. `redpanda.rest_proxy.request.errors.total`
 
 **Consumer Groups (5):**
+
 22. `redpanda.kafka.consumer_group.committed_offset`
 23. `redpanda.kafka.consumer_group.lag.max`
 24. `redpanda.kafka.consumer_group.lag.sum`
@@ -566,18 +605,22 @@ Use **enhanced extension** as it is now a **complete superset** of the official 
 26. `redpanda.kafka.consumer_group.topics` (NEW in v1.0.8)
 
 **Cluster Topology (4):**
+
 27. `redpanda.cluster.brokers` (NEW in v1.0.8)
 28. `redpanda.cluster.partitions` (NEW in v1.0.8)
 29. `redpanda.cluster.topics` (NEW in v1.0.8)
 30. `redpanda.kafka.replicas` (NEW in v1.0.8)
 
 **Partition Tracking (1):**
+
 31. `redpanda.kafka.max_offset` (NEW in v1.0.8)
 
 **Application Info (1):**
+
 32. `redpanda.application.build` (NEW in v1.0.8)
 
 **Topics/RPC (2):**
+
 33. `redpanda.kafka.request.bytes.total`
 34. `redpanda.rpc.active_connections`
 
@@ -588,7 +631,8 @@ Use **enhanced extension** as it is now a **complete superset** of the official 
 
 ---
 
-**Document Version**: 2.0 (updated for v1.0.11)
-**Last Updated**: October 7, 2025
-**Extension Version**: v1.0.11
+**Document Version**: 3.0 (updated for v1.0.13)
+**Last Updated**: October 8, 2025
+**Extension Version**: v1.0.13
 **Maintainer**: Enhanced Redpanda Extension Project
+**Status**: Production Ready with Partial Topology Support

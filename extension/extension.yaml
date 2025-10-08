@@ -1,15 +1,109 @@
 name: custom:redpanda.enhanced
-version: 1.0.11
+version: 1.0.13
 minDynatraceVersion: '1.310'
 author:
   name: Custom Enhanced Redpanda Extension
+topology:
+  types:
+    - name: redpanda:cluster
+      displayName: Redpanda Cluster
+      enabled: true
+      rules:
+        - idPattern: redpanda_cluster_{redpanda_cluster}
+          instanceNamePattern: "{redpanda_cluster}"
+          sources:
+            - sourceType: Metrics
+              condition: $prefix(redpanda.cluster)
+          attributes:
+            - pattern: '{redpanda_cluster}'
+              key: cluster_name
+              displayName: Cluster Name
+    - name: redpanda:namespace
+      displayName: Redpanda Namespace
+      enabled: true
+      rules:
+        - idPattern: redpanda_namespace_{redpanda_cluster}_{redpanda_namespace}
+          instanceNamePattern: "{redpanda_namespace}"
+          sources:
+            - sourceType: Metrics
+              condition: $prefix(redpanda.kafka)
+          attributes:
+            - pattern: '{redpanda_cluster}'
+              key: cluster
+              displayName: Cluster
+            - pattern: '{redpanda_namespace}'
+              key: namespace
+              displayName: Namespace
+    - name: redpanda:topic
+      displayName: Redpanda Topic
+      enabled: true
+      rules:
+        - idPattern: redpanda_topic_{redpanda_cluster}_{redpanda_namespace}_{redpanda_topic}
+          instanceNamePattern: "{redpanda_topic}"
+          sources:
+            - sourceType: Metrics
+              condition: $prefix(redpanda.kafka)
+          attributes:
+            - pattern: '{redpanda_cluster}'
+              key: cluster
+              displayName: Cluster
+            - pattern: '{redpanda_namespace}'
+              key: namespace
+              displayName: Namespace
+            - pattern: '{redpanda_topic}'
+              key: topic
+              displayName: Topic Name
+            - pattern: '{redpanda_kafka_replicas}'
+              key: replication_factor
+              displayName: Replication Factor
+    - name: redpanda:partition
+      displayName: Redpanda Partition
+      enabled: true
+      rules:
+        - idPattern: redpanda_partition_{redpanda_cluster}_{redpanda_namespace}_{redpanda_topic}_{redpanda_partition}
+          instanceNamePattern: "{redpanda_topic} - Partition {redpanda_partition}"
+          sources:
+            - sourceType: Metrics
+              condition: $prefix(redpanda.kafka)
+          attributes:
+            - pattern: '{redpanda_cluster}'
+              key: cluster
+              displayName: Cluster
+            - pattern: '{redpanda_namespace}'
+              key: namespace
+              displayName: Namespace
+            - pattern: '{redpanda_topic}'
+              key: topic
+              displayName: Topic Name
+            - pattern: '{redpanda_partition}'
+              key: partition_id
+              displayName: Partition ID
+  relationships:
+    - fromType: redpanda:namespace
+      typeOfRelation: CHILD_OF
+      toType: redpanda:cluster
+      sources:
+        - sourceType: Metrics
+          condition: $prefix(redpanda.kafka)
+    - fromType: redpanda:topic
+      typeOfRelation: CHILD_OF
+      toType: redpanda:namespace
+      sources:
+        - sourceType: Metrics
+          condition: $prefix(redpanda.kafka)
+    - fromType: redpanda:partition
+      typeOfRelation: CHILD_OF
+      toType: redpanda:topic
+      sources:
+        - sourceType: Metrics
+          condition: $prefix(redpanda.kafka)
 prometheus:
 - group: latency_metrics
   interval:
     minutes: 1
   dimensions:
   - key: redpanda_cluster
-    value: label:redpanda_cluster
+    value: const:your-redpanda-cluster
   subgroups:
   - subgroup: kafka_request_latency
     dimensions:
@@ -46,7 +140,7 @@ prometheus:
     minutes: 1
   dimensions:
   - key: redpanda_cluster
-    value: label:redpanda_cluster
+    value: const:your-redpanda-cluster
   - key: shard
     value: label:shard
   metrics:
@@ -61,35 +155,53 @@ prometheus:
     minutes: 1
   dimensions:
   - key: redpanda_cluster
-    value: label:redpanda_cluster
-  metrics:
-  - key: redpanda.kafka.under_replicated_replicas
-    value: metric:redpanda_kafka_under_replicated_replicas
-    type: gauge
-  - key: redpanda.cluster.unavailable_partitions
-    value: metric:redpanda_cluster_unavailable_partitions
-    type: gauge
-  - key: redpanda.raft.leadership.changes
-    value: metric:redpanda_raft_leadership_changes
-    type: count
-  - key: redpanda.node.status.rpcs_timed_out
-    value: metric:redpanda_node_status_rpcs_timed_out
-    type: count
-  - key: redpanda.cluster.brokers
-    value: metric:redpanda_cluster_brokers
-    type: gauge
-  - key: redpanda.cluster.partitions
-    value: metric:redpanda_cluster_partitions
-    type: gauge
-  - key: redpanda.cluster.topics
-    value: metric:redpanda_cluster_topics
-    type: gauge
+    value: const:your-redpanda-cluster
+  subgroups:
+  - subgroup: cluster_level_metrics
+    metrics:
+    - key: redpanda.cluster.unavailable_partitions
+      value: metric:redpanda_cluster_unavailable_partitions
+      type: gauge
+    - key: redpanda.node.status.rpcs_timed_out
+      value: metric:redpanda_node_status_rpcs_timed_out
+      type: count
+    - key: redpanda.cluster.brokers
+      value: metric:redpanda_cluster_brokers
+      type: gauge
+    - key: redpanda.cluster.partitions
+      value: metric:redpanda_cluster_partitions
+      type: gauge
+    - key: redpanda.cluster.topics
+      value: metric:redpanda_cluster_topics
+      type: gauge
+  - subgroup: topic_level_metrics
+    dimensions:
+    - key: redpanda_namespace
+      value: label:redpanda_namespace
+    - key: redpanda_topic
+      value: label:redpanda_topic
+    metrics:
+    - key: redpanda.raft.leadership.changes
+      value: metric:redpanda_raft_leadership_changes
+      type: count
+  - subgroup: partition_level_metrics
+    dimensions:
+    - key: redpanda_namespace
+      value: label:redpanda_namespace
+    - key: redpanda_topic
+      value: label:redpanda_topic
+    - key: redpanda_partition
+      value: label:redpanda_partition
+    metrics:
+    - key: redpanda.kafka.under_replicated_replicas
+      value: metric:redpanda_kafka_under_replicated_replicas
+      type: gauge
 - group: throughput
   interval:
     minutes: 1
   dimensions:
   - key: redpanda_cluster
-    value: label:redpanda_cluster
+    value: const:your-redpanda-cluster
   - key: redpanda_server
     value: label:redpanda_server
   metrics:
@@ -104,7 +216,7 @@ prometheus:
     minutes: 1
   dimensions:
   - key: redpanda_cluster
-    value: label:redpanda_cluster
+    value: const:your-redpanda-cluster
   subgroups:
   - subgroup: cpu_metrics
     metrics:
@@ -154,7 +266,7 @@ prometheus:
     minutes: 1
   dimensions:
   - key: redpanda_cluster
-    value: label:redpanda_cluster
+    value: const:your-redpanda-cluster
   metrics:
   - key: redpanda.schema_registry.request.errors.total
     value: metric:redpanda_schema_registry_request_errors_total
@@ -167,7 +279,7 @@ prometheus:
     minutes: 1
   dimensions:
   - key: redpanda_cluster
-    value: label:redpanda_cluster
+    value: const:your-redpanda-cluster
   - key: redpanda_group
     value: label:redpanda_group
   - key: redpanda_topic
@@ -195,7 +307,7 @@ prometheus:
     minutes: 1
   dimensions:
   - key: redpanda_cluster
-    value: label:redpanda_cluster
+    value: const:your-redpanda-cluster
   - key: redpanda_namespace
     value: label:redpanda_namespace
   - key: redpanda_topic
@@ -217,7 +329,7 @@ prometheus:
     minutes: 1
   dimensions:
   - key: redpanda_cluster
-    value: label:redpanda_cluster
+    value: const:your-redpanda-cluster
   - key: redpanda_server
     value: label:redpanda_server
   metrics:

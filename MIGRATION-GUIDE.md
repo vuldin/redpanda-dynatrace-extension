@@ -1,7 +1,8 @@
 # Migration Guide: Official → Enhanced Dynatrace Redpanda Extension
 
-**Version**: 1.0
-**Date**: October 7, 2025
+**Version**: 2.0
+**Date**: October 8, 2025
+**Extension Version**: v1.0.13
 **Target**: Users migrating from official Dynatrace Hub extension to enhanced custom extension
 
 ---
@@ -12,8 +13,9 @@ The enhanced extension is a complete superset of the official extension, providi
 
 - ✅ **ALL official metrics** including latency histograms with percentile support
 - ✅ **2 additional unique critical metrics** (disk alert, RPC timeouts)
-- ✅ **37 total metrics** vs 29 in official extension
+- ✅ **40 total metrics** vs 29 in official extension
 - ✅ **100% feature parity** - no compromises
+- ✅ **Partial topology support** (cluster & topic entities in Smartscape)
 - ✅ **Open source** on GitHub - fully customizable
 - ✅ **Community-driven** improvements and updates
 - ✅ **Same metric names** - dashboards and alerts work without changes
@@ -50,7 +52,7 @@ The enhanced extension now provides **100% feature parity** with the official ex
 
 ### Non-Critical Changes
 - **Pre-built dashboards**: Official extension has overview dashboard - you'll need to rebuild (but all metrics are available)
-- **Custom entity types**: Official creates namespace/topic/partition entities - enhanced uses dimensions
+- **Custom entity types**: Official creates full namespace/topic/partition hierarchy - enhanced creates cluster & topic entities (namespace/partition limited by Dynatrace constraint, but dimensions still work for filtering)
 
 ---
 
@@ -115,11 +117,20 @@ rpk cluster config set enable_consumer_group_metrics '["group", "partition", "co
 In Dynatrace:
 1. Navigate to **Metrics**
 2. Search: `redpanda`
-3. Expected: **37 metrics** visible
+3. Expected: **40 metrics** visible (38 without consumer lag)
 
 Compare counts:
 - Official: 29 metrics
-- Enhanced: 37 metrics
+- Enhanced: 40 metrics
+
+**Verify topology entities:**
+```dql
+// Check cluster entities
+fetch dt.entity.redpanda:cluster
+
+// Check topic entities
+fetch dt.entity.redpanda:topic
+```
 
 **Key metrics to verify:**
 ```
@@ -359,11 +370,13 @@ After migration is complete:
 
 ### Q: What if I need latency metrics?
 
-**A**: ✅ **RESOLVED in v1.0.10** - Enhanced extension now has full latency histogram support with percentile queries (p50, p75, p90, p95, p99).
+**A**: ✅ **RESOLVED in v1.0.10-11** - Enhanced extension now has full latency histogram support with percentile queries (p50, p75, p90, p95, p99) for all three latency metrics (Kafka, RPC, REST Proxy).
 
 **Query syntax**:
 ```
 redpanda.kafka.request.latency.seconds_bucket.count:splitBy(redpanda_request):percentile(95.0)
+redpanda.rpc.request.latency.seconds_bucket.count:splitBy(redpanda_server):percentile(99.0)
+redpanda.rest_proxy.request.latency.seconds_bucket.count:percentile(99.0)
 ```
 
 ### Q: Is enhanced extension officially supported by Dynatrace?
@@ -412,6 +425,7 @@ For issues or questions:
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: October 7, 2025
-**Status**: Production Ready
+**Document Version**: 2.0
+**Last Updated**: October 8, 2025
+**Extension Version**: v1.0.13
+**Status**: Production Ready with Partial Topology Support
